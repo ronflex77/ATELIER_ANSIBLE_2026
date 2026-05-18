@@ -1,6 +1,10 @@
 ---
-- name: Atelier Ansible dans GitHub Codespaces - version durcie avec remédiation
-  hosts: local
+# Playbook principal - supporte les roles DEV et PROD
+# Usage DEV  : ansible-playbook -i inventory.ini playbook.yml --limit dev
+# Usage PROD : ansible-playbook -i inventory.ini playbook.yml --limit prod
+
+- name: Atelier Ansible - Deploiement avec roles DEV et PROD
+  hosts: all
   become: true
   gather_facts: true
 
@@ -10,31 +14,32 @@
     yarn_repo_disabled_file: /etc/apt/sources.list.d/yarn.list.disabled
 
   tasks:
-    - name: Afficher le système cible
+    - name: Afficher le systeme cible
       debug:
         msg:
-          - "Hôte cible : {{ inventory_hostname }}"
+          - "Hote cible : {{ inventory_hostname }}"
+          - "Environnement : {{ env }}"
           - "OS : {{ ansible_distribution }} {{ ansible_distribution_version }}"
           - "Python : {{ ansible_python.executable | default('inconnu') }}"
 
-    - name: Vérifier si le dépôt Yarn existe
+    - name: Verifier si le depot Yarn existe
       stat:
         path: "{{ yarn_repo_file }}"
       register: yarn_repo_stat
 
-    - name: Afficher un avertissement si le dépôt Yarn est présent
+    - name: Afficher un avertissement si le depot Yarn est present
       debug:
         msg:
-          - "Un dépôt Yarn a été détecté : {{ yarn_repo_file }}"
-          - "Il peut provoquer un échec de apt update si sa clé GPG est absente."
+          - "Un depot Yarn a ete detecte : {{ yarn_repo_file }}"
+          - "Il peut provoquer un echec de apt update si sa cle GPG est absente."
       when: yarn_repo_stat.stat.exists
 
-    - name: Désactiver temporairement le dépôt Yarn
+    - name: Desactiver temporairement le depot Yarn
       command: mv "{{ yarn_repo_file }}" "{{ yarn_repo_disabled_file }}"
       when: yarn_repo_stat.stat.exists
       changed_when: true
 
-    - name: Mettre à jour le cache APT
+    - name: Mettre a jour le cache APT
       apt:
         update_cache: true
 
@@ -43,7 +48,7 @@
         name: nginx
         state: present
 
-    - name: Vérifier que le répertoire web existe
+    - name: Verifier que le repertoire web existe
       file:
         path: /var/www/html
         state: directory
@@ -51,26 +56,26 @@
         group: root
         mode: "0755"
 
-    - name: Déployer la page HTML personnalisée
-      copy:
+    - name: Deployer la page HTML personnalisee via template Ansible
+      template:
         src: files/index.html
         dest: "{{ page_dest }}"
         owner: root
         group: root
         mode: "0644"
-      notify: Redémarrer nginx
+      notify: Redemarrer nginx
 
-    - name: Activer nginx au démarrage
+    - name: Activer nginx au demarrage
       service:
         name: nginx
         enabled: true
 
-    - name: Démarrer nginx
+    - name: Demarrer nginx
       service:
         name: nginx
         state: started
 
-    - name: Vérifier que le site répond en HTTP
+    - name: Verifier que le site repond en HTTP
       uri:
         url: http://localhost
         method: GET
@@ -81,16 +86,16 @@
       delay: 2
       until: test_http.status == 200
 
-    - name: Afficher le code HTTP retourné
+    - name: Afficher le code HTTP retourne
       debug:
-        msg: "Le serveur répond avec le code HTTP {{ test_http.status }}"
+        msg: "Le serveur repond avec le code HTTP {{ test_http.status }}"
 
     - name: Afficher un extrait du contenu HTTP
       debug:
-        msg: "{{ test_http.content[:200] if test_http.content is defined else 'Aucun contenu retourné' }}"
+        msg: "{{ test_http.content[:200] if test_http.content is defined else 'Aucun contenu retourne' }}"
 
   handlers:
-    - name: Redémarrer nginx
+    - name: Redemarrer nginx
       service:
         name: nginx
         state: restarted
